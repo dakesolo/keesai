@@ -5,7 +5,6 @@ namespace App\Service;
 use App\Job\BQJob;
 use App\Log;
 use App\Model\Bd;
-use App\Model\Td;
 use Hyperf\AsyncQueue\Driver\DriverFactory;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
@@ -40,7 +39,7 @@ class BehaviorService
             $save[$k]['created_at'] = date('y-m-d H:i:s', time());;
             $save[$k]['updated_at'] = date('y-m-d H:i:s', time());;
             $save[$k]['retry'] = $bd['retry'];
-            $save[$k]['retry_max'] = $bd['retry_max'];
+            $save[$k]['retry_max'] = $bd['retryMax'];
         }
         Bd::insert($save);
         foreach ($save as $k=>$item) {

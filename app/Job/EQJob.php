@@ -3,7 +3,9 @@
 namespace App\Job;
 
 use App\Log;
+use App\Model\Bd;
 use App\Model\Td;
+use Hyperf\AsyncQueue\Driver\DriverFactory;
 use Hyperf\AsyncQueue\Job;
 use Hyperf\Logger\LoggerFactory;
 use Hyperf\Utils\ApplicationContext;
@@ -34,6 +36,22 @@ class EQJob extends Job
                 'status' => 'failed',
                 'desc'=>'expired'
             ]);
+
         Log::get()->info('message', $this->params);
     }
+
+    /**
+     * 全部补偿
+     * @return void
+     * @throws \Psr\Container\ContainerExceptionInterface
+     * @throws \Psr\Container\NotFoundExceptionInterface
+     */
+    /*public function compensate(): void
+    {
+        $bdList = Bd::query()->where('transaction_id', $this->params['transactionId'])->get();
+        foreach ($bdList as $bd) {
+            $params = Bd::createMessage($bd->toArray());
+            ApplicationContext::getContainer()->get(DriverFactory::class)->get('CQ')->push(new CQJob($params));
+        }
+    }*/
 }

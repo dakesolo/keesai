@@ -27,7 +27,8 @@ Keesai是基于hyperf+redis+mysql saga模式的高性能分布式事务框架
 * Order,Product,User,Coupon为四个微服务
 * Keesai作为独立的服务，并未与任何服务产生耦合
 * 用户发起一个`submitOrder`事务
-* BFF将该事务的各种行为`createOrder`、`debitMoney`、`debitProduct`、`exchangeCoupon`及事务`submitOrder`，通过Keesai提供的两个接口提交过去
+* BFF将该事务的各种行为`createOrder`、`debitMoney`、`debitProduct`、`exchangeCoupon`及事务`submitOrder`，通过Keesai提供的`提交事务清单
+  `、`提交行为清单`提交过去，具体格式，参考接口
 * BFF向用户返回`transactionId`
 * 以上行为，全部为串行，至此，BFF工作完成，Keesai工作开始
 * 服务方可通过Keesai的mysql跟踪状态及最终结果
@@ -47,22 +48,19 @@ _transaction/submitTransaction_
 ```json
 {
   "name": "submitOrder",
-  "expire": 10,
-  "action": [
-    "createOrder",
-    "debitMoney",
-    "debitProduct",
-    "exchangeCoupon"
-  ]
+  "expire": 10
 }
 ```
+| 名称            | 位置   | 类型       | 必选  | 说明       |
+|---------------|------|----------|-----|----------|
+| name          | body | string   | 是   | 事务名称，预定义 |
+| expire        | body | integer  | 是   | 过期时间，单位s |
 ##### response
 ```json
 {
   "transactionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
-
 ### 提交行为清单
 >该提交如果失败(服务方超时，服务方返回错误)，本地必须处理，要么本地补偿，要么最终成功提交
 ##### method
@@ -105,7 +103,7 @@ _transaction/submitBehavior_
       }
     ],
     "retry": 0,
-    "retry_max": 0
+    "retryMax": 0
   },
   {
     "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725",
@@ -136,90 +134,16 @@ _transaction/submitBehavior_
       }
     ],
     "retry": 0,
-    "retry_max": 0
+    "retryMax": 0
   }
 ]
 ```
-
-
-# 对象
-#### 事务清单 TD(transaction detail)
-```json
-{
-  "transactionId": "091838e12-e29b-41d4-a716-446655447777",
-  "name": "submitOrder",
-  "status": "pending",
-  "behaviors": [
-    "createOrder",
-    "debitMoney",
-    "debitProduct",
-    "exchangeCoupon"
-  ],
-  "expire": 30000,
-  "time": "2022-03-10 10:00:01"
-}
-```
-| 名称            | 位置   | 类型       | 必选  | 说明                        |
-|---------------|------|----------|-----|---------------------------|
-| transactionId | body | integer  | 是   | 事务id                      |
-| name          | body | string   | 是   | 事务名称，预定义                  |
-| status        | body | string   | 是   | 状态：pending,success,failed |
-| expire        | body | integer  | 是   | 过期时间，单位毫秒                 |
-| time          | body | datetime | 是   | 发生时间，待优化                  |
-| behaviors     | body | [string] | 是   | 行为清单，预定义                  |
-
-#### 行为清单 BD(behavior detail)
-```json
-{
-  "transactionId": "091838e12-e29b-41d4-a716-446655447777",
-  "name": "createOrder",
-  "consistency": "compensate",
-  "status": "ok",
-  "time":"2022-03-10 10:00:01",
-  "action": [
-    {
-      "name": "createOrder",
-      "execute": {
-        "path": "http://domain/createOrder",
-        "header": {},
-        "param": {
-          "transactionId": 1001,
-          "userId": 89,
-          "productId": 12188
-        }
-      },
-      "compensate": {
-        "path": "http://domain/removeOrder",
-        "header": {},
-        "param": {
-          "transactionId": 1001,
-          "orderId": 20090
-        }
-      }
-    }
-  ]
-}
-```
-| 名称                | 位置   | 类型       | 必选  | 说明                        |
-|-------------------|------|----------|-----|---------------------------|
-| transactionId     | body | string   | 是   | 事务id                      |
-| behaviorId        | body | string   | 是   | 行为id                      |
-| name              | body | string   | 是   | 行为名称                      |
-| consistency       | body | string   | 是   | 一致性描述：compensate,execute  |
-| status            | body | string   | 是   | 状态：success,failing,failed |
-| time              | body | string   | 是   | 发生时间，待优化                  |
-| action            | body | [object] | 是   | 动作                        |
-| » name            | body | string   | 是   | 动作名称                      |
-| » execute         | body | object   | 是   | 已执行，等效于http触发动作           |
-| »» path           | body | string   | 是   | 路径                        |
-| »» header         | body | object   | 是   | 头部                        |
-| »»» transactionId | body | string   | 是   | 分布式事务Id                   |
-| »» param          | body | object   | 否   | 示例参数                      |
-| »»» userId        | body | integer  | 是   | 示例值                       |
-| »»» productId     | body | integer  | 是   | 示例值                       |
-| » compensate      | body | object   | 是   | 补偿名称，与execute互补           |
-| »» path           | body | string   | 是   | 路径                        |
-| »» header         | body | object   | 是   | 头部                        |
-| »»» transactionId | body | string   | 是   | 分布式事务Id                   |
-| »» param          | body | object   | 是   | 示例参数                      |
-| »»» orderId       | body | string   | 是   | 示例值                       |
+| 名称            | 位置   | 类型       | 必选  | 说明                               |
+|---------------|------|----------|-----|----------------------------------|
+| transactionId | body | string   | 是   | 事务id                             |
+| name          | body | string   | 是   | 行为名称                             |
+| consistency   | body | string   | 是   | 一致性描述：compensate,execute         |
+| execute       | body | [object] | 是   | 正向操作，等效于http触发动作，值格式参考 Guzzle    |
+| compensate    | body | [object] | 是   | 补偿操作，等效于http触发动作，值格式参考 Guzzle    |
+| retry         | body | integer  | 是   | 重试间隔时长，单位s，consistency为execute有效 |
+| retryMax      | body | integer  | 是   | 重试最大次数，consistency为execute有效     |
