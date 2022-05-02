@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Process;
 
 use Hyperf\AsyncQueue\Process\ConsumerProcess;

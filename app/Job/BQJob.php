@@ -13,6 +13,7 @@ use Hyperf\Guzzle\ClientFactory;
 use Hyperf\Logger\LoggerFactory;
 use Hyperf\Utils\ApplicationContext;
 
+
 class BQJob extends Job
 {
     public $params;

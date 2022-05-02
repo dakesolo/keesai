@@ -3,12 +3,8 @@
 namespace App\Job;
 
 use App\Log;
-use App\Model\Bd;
 use App\Model\Td;
-use Hyperf\AsyncQueue\Driver\DriverFactory;
 use Hyperf\AsyncQueue\Job;
-use Hyperf\Logger\LoggerFactory;
-use Hyperf\Utils\ApplicationContext;
 
 class EQJob extends Job
 {

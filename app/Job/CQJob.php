@@ -2,10 +2,8 @@
 
 namespace App\Job;
 
-use App\Log;
 use App\Model\Bd;
 use GuzzleHttp\Exception\GuzzleException;
-use Hyperf\AsyncQueue\Driver\DriverFactory;
 use Hyperf\AsyncQueue\Job;
 use Hyperf\Guzzle\ClientFactory;
 use Hyperf\Utils\ApplicationContext;

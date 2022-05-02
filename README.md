@@ -1,13 +1,13 @@
 # 简介
-Keesai是基于hyperf+redis+mysql saga模式的高性能分布式事务框架
+Keesai是基于hyperf+redis queue+mysql saga模式的高性能分布式事务框架
 ### 名词
 * 事务`transaction`：比如下单，包含一系列行为
 * 行为`behavior`：一个事务包含若干个行为，可以这么认为，一个行为由一个微服务给出，包含执行和补偿
 * 执行`execute`: 行为正向执行
 * 补偿`compensate`：行为反向执行
-### 架构
-* 基于消息触发的高性能异步架构
-* 可观测的清单型架构
+### 特色
+* 支持异步
+* 代码无侵入
 ### 状态
 #### transaction
 * pending：初始状态
@@ -20,6 +20,8 @@ Keesai是基于hyperf+redis+mysql saga模式的高性能分布式事务框架
 * failed：执行失败，已补偿
 ![image.png](https://s1.ax1x.com/2022/05/02/OPUzqI.png)
 # 使用
+## 安装
+支持docker，请参考hyperf
 ## 举例说明
 ![image.png](https://s1.ax1x.com/2022/05/02/OPU7a6.png)
 * 图中描述的是一个订单事务
@@ -37,6 +39,7 @@ Keesai是基于hyperf+redis+mysql saga模式的高性能分布式事务框架
 >比如扣库存，库存服务方只能得到当前transactionId，而不能得到订单号，如果想要订单号，那么后期可以到调取事务清单及行为清单
 * 各个服务方只需要提供补偿动作、错误状态、成功状态，要求状态格式统一
 >如果第三方服务不提供补偿服务，需要自己再建个服务，然后自己实现补偿动作，该动作记录手工该处理的异常
+* 需要在各个微服务表中多加一个`transaction_id`，以便支持补偿、事务查询
 ## 接口
 ### 提交事务清单
 >该接口一般业务发起方提供

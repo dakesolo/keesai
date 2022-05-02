@@ -2,13 +2,10 @@
 
 namespace App\Job;
 
-use App\Log;
 use App\Model\Bd;
 use App\Model\Td;
 use Hyperf\AsyncQueue\Driver\DriverFactory;
 use Hyperf\AsyncQueue\Job;
-use Hyperf\DbConnection\Db;
-use Hyperf\Logger\LoggerFactory;
 use Hyperf\Utils\ApplicationContext;
 
 class TQJob extends Job
