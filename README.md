@@ -1,15 +1,61 @@
-## 原则
-* 一个事务里所调用的所有服务返回结果对其他事务都是透明的
->比如扣库存，库存服务方只能得到当前transactionId，而不能得到订单号，如果想要订单号，那么后期可以到调取事务清单
+# 简介
+Keesai是基于hyperf+redis+mysql saga模式的高性能分布式事务框架
+### 名词
+* 事务`transaction`：比如下单，包含一系列行为
+* 行为`behavior`：一个事务包含若干个行为，可以这么认为，一个行为由一个微服务给出，包含执行和补偿
+* 执行`execute`: 行为正向执行
+* 补偿`compensate`：行为反向执行
+### 架构
+* 基于消息触发的高性能异步架构
+* 可观测的清单型架构
+### 状态
+#### transaction
+* pending：初始状态
+* success：成功
+* failed：失败
+#### behavior
+* pending：初始状态
+* success：成功
+* failing：执行失败，未补偿
+* failed：执行失败，已补偿
+![image.png](https://s1.ax1x.com/2022/05/02/OPUzqI.png)
+# 使用
+## 举例说明
+![image.png](https://s1.ax1x.com/2022/05/02/OPU7a6.png)
+* 图中描述的是一个订单事务
+* BFF为事务组织方，可以将其当成一个微服务
+* Order,Product,User,Coupon为四个微服务
+* Keesai作为独立的服务，并未与任何服务产生耦合
+* 用户发起一个`submitOrder`事务
+* BFF将该事务的各种行为`createOrder`、`debitMoney`、`debitProduct`、`exchangeCoupon`及事务`submitOrder`，通过Keesai提供的两个接口提交过去
+* BFF向用户返回`transactionId`
+* 以上行为，全部为串行，至此，BFF工作完成，Keesai工作开始
+* 服务方可通过Keesai的mysql跟踪状态及最终结果
+## 开发原则
+* 一个事务里要求的所有行为返回结果对其他行为都是透明的，共享`transaction`
+>比如扣库存，库存服务方只能得到当前transactionId，而不能得到订单号，如果想要订单号，那么后期可以到调取事务清单及行为清单
 * 各个服务方只需要提供补偿动作、错误状态、成功状态，要求状态格式统一
 >如果第三方服务不提供补偿服务，需要自己再建个服务，然后自己实现补偿动作，该动作记录手工该处理的异常
-## Client接口
+## 接口
 ### 提交事务清单
 >该接口一般业务发起方提供
+##### method
+post
 ##### path
 _transaction/submitTransaction_
 ##### param
-参考TD对象
+```json
+{
+  "name": "submitOrder",
+  "expire": 10,
+  "action": [
+    "createOrder",
+    "debitMoney",
+    "debitProduct",
+    "exchangeCoupon"
+  ]
+}
+```
 ##### response
 ```json
 {
@@ -17,39 +63,84 @@ _transaction/submitTransaction_
 }
 ```
 
-### 获取事务状态
->根据transactionId获取事务状态，需要先判断该事务是否是有效状态，再去执行action
-##### path
-_transaction/getTransactionStatus_
-
-##### param
-```json
-{
-  "transactionId": 1001
-}
-```
-##### response
-```json
-{
-  "status": "pending"
-}
-```
-
-
-
 ### 提交行为清单
 >该提交如果失败(服务方超时，服务方返回错误)，本地必须处理，要么本地补偿，要么最终成功提交
+##### method
+post
 ##### path
 _transaction/submitBehavior_
-
 ##### param
-参考BD对象
-##### response
 ```json
-{
-  "behaviorId": "091838e12-e29b-41d4-a716-446655447777"
-}
+[
+  {
+    "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725",
+    "consistency": "compensate",
+    "name": "createOrder",
+    "execute": [
+      "GET",
+      "http://192.168.175.128:9501/order/createOrder",
+      {
+        "query": {
+          "productId": "123123",
+          "number": "30",
+          "userId": 90
+        },
+        "headers": {
+          "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725"
+        }
+      }
+    ],
+    "compensate": [
+      "GET",
+      "http://192.168.175.128:9501/order/createOrderCompensate",
+      {
+        "query": {
+          "productId": "123123",
+          "number": "30",
+          "userId": 90
+        },
+        "headers": {
+          "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725"
+        }
+      }
+    ],
+    "retry": 0,
+    "retry_max": 0
+  },
+  {
+    "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725",
+    "consistency": "compensate",
+    "name": "debitProduct",
+    "execute": [
+      "GET",
+      "http://192.168.175.128:9501/product/debitProduct",
+      {
+        "query": {
+          "productId": "123123"
+        },
+        "headers": {
+          "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725"
+        }
+      }
+    ],
+    "compensate": [
+      "GET",
+      "http://192.168.175.128:9501/product/debitProductCompensate",
+      {
+        "query": {
+          "productId": "123123"
+        },
+        "headers": {
+          "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725"
+        }
+      }
+    ],
+    "retry": 0,
+    "retry_max": 0
+  }
+]
 ```
+
 
 # 对象
 #### 事务清单 TD(transaction detail)
@@ -132,92 +223,3 @@ _transaction/submitBehavior_
 | »»» transactionId | body | string   | 是   | 分布式事务Id                   |
 | »» param          | body | object   | 是   | 示例参数                      |
 | »»» orderId       | body | string   | 是   | 示例值                       |
-
-#### TP(transaction processor)
-#### BP(behavior processor)
-```mermaid
-graph TD
-pending --> |all behaviors' status must be success|success
-pending --> failing --> |all behaviors have been changed failed|failed --> |if one of behaviors submits, transaction' status will be failing |failing
-```
-![image.png](https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/6e5cb77c5b514487a3778a25d968b795~tplv-k3u1fbpfcp-watermark.image?)
-
-#### Success
-
-#### Fail
-* After one of behaviors failed, it will send a message A which compose of BD primarily with failing status.
-* TP gets A,and save BD and send some messages ...B,then changes the status of this TD to failed.
-* BP gets these messages ...B,then execute or compensate these BD which be included into ...B,Meanwhile it will change the status of these behaviors to failed which the status may be success or failing.
-
-
-
-```json
-[
-  {
-    "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725",
-    "consistency": "compensate",
-    "name": "createOrder",
-    "execute": [
-      "GET",
-      "http://192.168.175.128:9501/order/createOrder",
-      {
-        "query": {
-          "productId": "123123",
-          "number": "30",
-          "userId": 90
-        },
-        "headers": {
-          "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725"
-        }
-      }
-    ],
-    "compensate": [
-      "GET",
-      "http://192.168.175.128:9501/order/createOrderCompensate",
-      {
-        "query": {
-          "productId": "123123",
-          "number": "30",
-          "userId": 90
-        },
-        "headers": {
-          "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725"
-        }
-      }
-    ],
-    "retry": 0,
-    "retry_max": 0
-  },
-  {
-    "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725",
-    "consistency": "compensate",
-    "name": "debitProduct",
-    "execute": [
-      "GET",
-      "http://192.168.175.128:9501/product/debitProduct",
-      {
-        "query": {
-          "productId": "123123"
-        },
-        "headers": {
-          "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725"
-        }
-      }
-    ],
-    "compensate": [
-      "GET",
-      "http://192.168.175.128:9501/product/debitProductCompensate",
-      {
-        "query": {
-          "productId": "123123"
-        },
-        "headers": {
-          "transactionId": "f2e65fc5-8177-4794-abbc-77cac5716725"
-        }
-      }
-    ],
-    "retry": 0,
-    "retry_max": 0
-  }
-]
-```
